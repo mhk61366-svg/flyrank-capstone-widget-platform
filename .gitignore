@@ -1,0 +1,51 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
+
+# Dependencies and builds
+node_modules/
+vendor/
+dist/
+build/
+out/
+.next/
+.nuxt/
+coverage/
+.cache/
+.tmp/
+temp/
+
+# Logs and runtime files
+*.log
+logs/
+*.pid
+
+# Local databases
+*.sqlite
+*.sqlite3
+*.db
+
+# IDE and OS files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
+*.suo
+*.user
+.DS_Store
+Thumbs.db
+
+# Local Docker files
+docker-compose.override.yml
+
+# Testing and tooling
+.nyc_output/
+.pytest_cache/
+__pycache__/
