@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+psycopg[binary]
+pydantic
+python-dotenv
+supabase
+slowapi
+httpx
+email-validator
+pytest
