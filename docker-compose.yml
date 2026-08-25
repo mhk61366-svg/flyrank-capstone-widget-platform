@@ -27,6 +27,7 @@ services:
         condition: service_healthy
     volumes:
       - ./app:/app/app
+      - ./tests:/app/tests
 
 volumes:
   widget_pgdata:

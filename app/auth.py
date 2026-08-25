@@ -4,8 +4,8 @@ from app.config import SUPABASE_URL, SUPABASE_KEY
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def get_current_tenant_id(authorization: str = Header(...)) -> str:
-    if not authorization.startswith("Bearer "):
+def get_current_tenant_id(authorization: str = Header(None)) -> str:
+    if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing bearer token")
     token = authorization.removeprefix("Bearer ").strip()
     try:

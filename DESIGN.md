@@ -70,7 +70,7 @@ submissions
 ```
 POST   /widgets                              create widget
 GET    /widgets                              list own widgets
-GET    /widgets/{id}                         get one (403 if not owner's tenant)
+GET    /widgets/{id}                         get one (404 if not owner's tenant)
 PATCH  /widgets/{id}                         update
 DELETE /widgets/{id}                         delete
 GET    /widgets/{id}/submissions             list submissions (own widget only)
