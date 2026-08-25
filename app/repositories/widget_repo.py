@@ -50,3 +50,9 @@ def delete_owned(conn, widget_id: str, tenant_id: str) -> bool:
     with conn.cursor() as cur:
         cur.execute("DELETE FROM widgets WHERE id = %s AND tenant_id = %s RETURNING id", (widget_id, tenant_id))
         return cur.fetchone() is not None
+
+def get_by_id(conn, widget_id: str):
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM widgets WHERE id = %s", (widget_id,))
+        row = cur.fetchone()
+        return row_to_dict(cur, row) if row else None
