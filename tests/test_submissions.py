@@ -4,7 +4,7 @@ from app.main import app
 from app.auth import get_current_tenant_id
 from app.services.submission_service import safe_ip
 from app.services.rate_limit import limiter
-
+from app.services import geo_enrichment
 
 FAKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
@@ -86,3 +86,28 @@ def test_normal_request_succeeds_after_rate_limit_window(public_client, widget_i
     limiter.reset()
     resp = public_client.post("/submissions", json=payload)
     assert resp.status_code == 201
+
+def test_geo_enrichment_uses_first_provider_when_available(monkeypatch):
+    monkeypatch.setattr(geo_enrichment, "try_ip_api", lambda ip: {"country": "Realland", "city": "Realville"})
+    monkeypatch.setattr(geo_enrichment, "try_ipapi_co", lambda ip: (_ for _ in ()).throw(AssertionError("should not be called")))
+    result = geo_enrichment.enrich("1.2.3.4")
+    assert result == {"country": "Realland", "city": "Realville"}
+    
+def test_geo_enrichment_falls_back_to_second_provider(public_client, widget_id, monkeypatch):
+    monkeypatch.setattr(geo_enrichment, "try_ip_api", lambda ip: None)
+    monkeypatch.setattr(geo_enrichment, "try_ipapi_co", lambda ip: {"country": "Testland", "city": "Testville"})
+    result = geo_enrichment.enrich("1.2.3.4")
+    assert result == {"country": "Testland", "city": "Testville"}
+
+def test_geo_enrichment_returns_none_when_both_providers_down(monkeypatch):
+    monkeypatch.setattr(geo_enrichment, "try_ip_api", lambda ip: None)
+    monkeypatch.setattr(geo_enrichment, "try_ipapi_co", lambda ip: None)
+    result = geo_enrichment.enrich("1.2.3.4")
+    assert result == {"country": None, "city": None}
+
+def test_submission_succeeds_when_both_geo_providers_down(public_client, widget_id, monkeypatch):
+    monkeypatch.setattr(geo_enrichment, "try_ip_api", lambda ip: None)
+    monkeypatch.setattr(geo_enrichment, "try_ipapi_co", lambda ip: None)
+    resp = public_client.post("/submissions", json=valid_payload(widget_id))
+    assert resp.status_code == 201
+    assert resp.json()["status"] == "stored"

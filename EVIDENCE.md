@@ -55,7 +55,6 @@ with a matching `access-control-allow-origin` header. A preflight from an unconf
 (`http://evil.com`) returns no `access-control-allow-origin` header at all — proving the CORS
 middleware restricts by origin rather than allowing everything (`*`).
 
----
 
 ## Abuse Protection & Spam Control (2c)
 
@@ -110,43 +109,59 @@ A valid IP string (`8.8.8.8`) passes through unchanged; `"testclient"` and `None
 `None`, which the `inet` column accepts as `NULL`.
 
 **Terminal output (full suite after Phase 2c):**
-========================================== test session starts ==========================================
+========================================= test session starts =========================================
 platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0 -- /usr/local/bin/python3.12
 cachedir: .pytest_cache
 rootdir: /app
 configfile: pytest.ini
 testpaths: tests
 plugins: anyio-4.14.2
-collected 17 items
+collected 21 items
 
-tests/test_submissions.py::test_normalize_ip_accepts_valid_ip PASSED                          [  5%]
-tests/test_submissions.py::test_normalize_ip_rejects_garbage PASSED                           [ 11%]
-tests/test_submissions.py::test_valid_submission_stored PASSED                                [ 17%]
-tests/test_submissions.py::test_missing_required_field_returns_422 PASSED                     [ 23%]
-tests/test_submissions.py::test_invalid_email_returns_422 PASSED                              [ 29%]
-tests/test_submissions.py::test_oversized_message_returns_422 PASSED                          [ 35%]
-tests/test_submissions.py::test_cors_preflight_allows_configured_origin PASSED                [ 41%]
-tests/test_submissions.py::test_cors_preflight_rejects_disallowed_origin PASSED               [ 47%]
-tests/test_submissions.py::test_honeypot_filled_marks_rejected_spam PASSED                    [ 52%]
-tests/test_submissions.py::test_rate_limit_returns_429_after_burst PASSED                     [ 58%]
-tests/test_submissions.py::test_normal_request_succeeds_after_rate_limit_window PASSED        [ 64%]
-tests/test_widgets.py::test_create_widget_requires_auth PASSED                                [ 70%]
-tests/test_widgets.py::test_create_and_get_widget PASSED                                      [ 76%]
-tests/test_widgets.py::test_get_nonexistent_widget_returns_404 PASSED                         [ 82%]
-tests/test_widgets.py::test_tenant_isolation_on_get_update_delete PASSED                      [ 88%]
-tests/test_widgets.py::test_update_widget PASSED                                              [ 94%]
-tests/test_widgets.py::test_delete_widget PASSED                                              [100%]
+tests/test_submissions.py::test_normalize_ip_accepts_valid_ip PASSED                              [  4%]
+tests/test_submissions.py::test_normalize_ip_rejects_garbage PASSED                               [  9%]
+tests/test_submissions.py::test_valid_submission_stored PASSED                                    [ 14%]
+tests/test_submissions.py::test_missing_required_field_returns_422 PASSED                         [ 19%]
+tests/test_submissions.py::test_invalid_email_returns_422 PASSED                                  [ 23%]
+tests/test_submissions.py::test_oversized_message_returns_422 PASSED                              [ 28%] 
+tests/test_submissions.py::test_cors_preflight_allows_configured_origin PASSED                    [ 33%]
+tests/test_submissions.py::test_cors_preflight_rejects_disallowed_origin PASSED                   [ 38%]
+tests/test_submissions.py::test_honeypot_filled_marks_rejected_spam PASSED                        [ 42%]
+tests/test_submissions.py::test_rate_limit_returns_429_after_burst PASSED                         [ 47%]
+tests/test_submissions.py::test_normal_request_succeeds_after_rate_limit_window PASSED            [ 52%]
+tests/test_submissions.py::test_geo_enrichment_uses_first_provider_when_available PASSED          [ 57%]
+tests/test_submissions.py::test_geo_enrichment_falls_back_to_second_provider PASSED               [ 61%]
+tests/test_submissions.py::test_geo_enrichment_returns_none_when_both_providers_down PASSED       [ 66%]
+tests/test_submissions.py::test_submission_succeeds_when_both_geo_providers_down PASSED           [ 71%]
+tests/test_widgets.py::test_create_widget_requires_auth PASSED                                    [ 76%]
+tests/test_widgets.py::test_create_and_get_widget PASSED                                          [ 80%]
+tests/test_widgets.py::test_get_nonexistent_widget_returns_404 PASSED                             [ 85%]
+tests/test_widgets.py::test_tenant_isolation_on_get_update_delete PASSED                          [ 90%]
+tests/test_widgets.py::test_update_widget PASSED                                                  [ 95%]
+tests/test_widgets.py::test_delete_widget PASSED                                                  [100%]
 
-========================================== 17 passed in 1.47s ==========================================
+========================================== 21 passed in 1.53s ==========================================
+
 
 ---
 
 ## Geo Enrichment & Provider Fallback (2d)
 
+### ✅ Geo enrichment uses the first provider directly when it succeeds, without calling the second
+
+**Test:** `test_geo_enrichment_uses_first_provider_when_available`
+**Command:** `docker compose exec api pytest -v -k geo_enrichment`
+
+The first provider is mocked to return real-looking data; the second provider is mocked to raise
+an `AssertionError` if called at all. The test passes, proving the fallback chain short-circuits
+correctly and never wastes a call to the second provider when the first one already answered —
+without this test, a bug that always called both providers regardless of the first result would
+go undetected.
+
 ### ✅ Geo enrichment falls back to the second provider when the first is unavailable
 
 **Test:** `test_geo_enrichment_falls_back_to_second_provider`
-**Command:** `docker compose exec api pytest -v tests/test_submissions.py -k geo_enrichment`
+**Command:** `docker compose exec api pytest -v -k geo_enrichment`
 
 The first provider is mocked as unavailable and the second provider returns `Testland` / `Testville`.
 The fallback chain returns the second provider's result without making a real network request.
@@ -154,7 +169,7 @@ The fallback chain returns the second provider's result without making a real ne
 ### ✅ Geo enrichment degrades safely when both providers are unavailable
 
 **Test:** `test_geo_enrichment_returns_none_when_both_providers_down`
-**Command:** `docker compose exec api pytest -v tests/test_submissions.py -k geo_enrichment`
+**Command:** `docker compose exec api pytest -v -k geo_enrichment`
 
 When both providers are mocked as unavailable, enrichment returns `country: None` and `city: None`
 rather than raising an error.
@@ -162,7 +177,7 @@ rather than raising an error.
 ### ✅ Submission still succeeds when both geo providers are unavailable
 
 **Test:** `test_submission_succeeds_when_both_geo_providers_down`
-**Command:** `docker compose exec api pytest -v tests/test_submissions.py -k geo`
+**Command:** `docker compose exec api pytest -v -k geo`
 
 The submission endpoint returns `201` with `status: "stored"` even when both geo providers fail,
 proving that enrichment degrades without blocking valid submissions.
@@ -171,24 +186,32 @@ proving that enrichment degrades without blocking valid submissions.
 
 **Command:** `docker compose exec db psql -U widgetuser -d widgetdb -c "SELECT country, city, ip_address FROM submissions ORDER BY created_at DESC LIMIT 1;"`
 
-With a temporary public IP used for the manual verification, the database stored the provider result:
+**Note on reading this evidence:** `ip_address` and the IP passed into `geo_enrichment.enrich()`
+are two independently-stored values in this codebase — `ip_address` always reflects the real
+caller (here, the internal Docker gateway `172.18.0.1`, since the request came from inside the
+Docker network), while the geo lookup itself was temporarily pointed at a real public IP
+(`8.8.8.8`) purely to confirm the provider APIs return live data. The mismatch between the two
+columns below is expected, not a data inconsistency.
 
+To confirm real provider enrichment works, `geo_enrichment.enrich()`'s call site was temporarily
+hardcoded to a public IP (`8.8.8.8`):
 ```text
-country    |  city   | ip_address
----------------+---------+------------
- United States | Ashburn | 172.18.0.1
+country       |  city   | ip_address
+--------------+---------+------------
+United States | Ashburn | 172.18.0.1
 (1 row)
 ```
 
-After the hardcoded IP was reverted, the local Docker gateway address had no geo result, as expected:
-
+After reverting the hardcode, a submission through the real endpoint (real caller IP,
+`172.18.0.1`, an internal/non-routable address with no geo data) correctly stores empty geo
+fields rather than crashing or returning stale data:
 ```text
 country | city | ip_address
----------+------+------------
-		 |      | 172.18.0.
+--------+------+-------------
+        |      | 172.18.0.1
 (1 row)
 ```
 
-The first output proves real provider enrichment returned data; the second confirms the reverted
-implementation no longer uses the temporary hardcoded address and safely stores empty geo fields
-for the local Docker address.
+The first output proves real provider enrichment returns data over the live network; the second
+confirms the endpoint degrades safely (stores `NULL` geo fields, no error) once the hardcode is
+removed and a real, non-geolocatable IP is used.
