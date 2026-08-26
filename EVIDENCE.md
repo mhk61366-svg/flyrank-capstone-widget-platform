@@ -55,7 +55,53 @@ with a matching `access-control-allow-origin` header. A preflight from an unconf
 (`http://evil.com`) returns no `access-control-allow-origin` header at all — proving the CORS
 middleware restricts by origin rather than allowing everything (`*`).
 
-**Terminal output (all 12 tests above):**
+
+## Abuse Protection & Spam Control (2c)
+
+### ✅ Rate limiting per IP returns 429 under a burst
+
+**Test:** `test_rate_limit_returns_429_after_burst`
+**Command:** `docker compose exec api pytest -v`
+
+Firing 15 rapid submission requests from the test client returns `201` for the requests within
+the configured limit, then `429 Too Many Requests` once the per-IP threshold is crossed —
+confirming the limiter engages under a burst rather than letting every request through.
+
+### ✅ At least one spam-prevention technique demonstrably blocks a spam submission
+
+**Test:** `test_honeypot_filled_marks_rejected_spam`
+**Command:** `docker compose exec api pytest -v`
+
+A submission with a non-empty `hp_field` (the honeypot — real users never see or fill it; only a
+bot blindly filling every input would) is stored with `status: "rejected_spam"` and
+`honeypot_triggered: true`, rather than being treated as a normal lead. The check is
+presence-based, not keyword-based — any non-empty value trips it, not specific bot-like text.
+
+### Bug fixed during this phase: client IP rejected by Postgres under automated tests
+
+FastAPI's `TestClient` doesn't make a real network connection, so `request.client.host` returns
+the literal string `"testclient"` instead of a real IP. The `submissions.ip_address` column is
+typed `inet`, which does strict validation and rejected that string outright
+(`psycopg.errors.InvalidTextRepresentation`), causing three tests
+(`test_valid_submission_stored`, `test_honeypot_filled_marks_rejected_spam`,
+`test_rate_limit_returns_429_after_burst`) to fail with a DB-layer error rather than an
+application-logic error.
+
+**Fix:** added `safe_ip()` in `app/services/submission_service.py`, which validates the
+incoming string against `ipaddress.ip_address()` and returns `None` for anything that isn't a
+real IP, before it reaches the repository/SQL layer. This also hardens the endpoint against a
+real-world edge case — some reverse-proxy configurations leave `request.client` as `None` — not
+just the test artifact.
+
+**Tests:** `test_normalize_ip_accepts_valid_ip`, `test_normalize_ip_rejects_garbage`
+**Command:** `docker compose exec api pytest -v`
+
+A valid IP string (`8.8.8.8`) passes through unchanged; `"testclient"` and `None` both resolve to
+`None`, which the `inet` column accepts as `NULL`.
+
+**Terminal output (full suite after Phase 2c):**
+
+
 ```
 ========================================== test session starts ==========================================
 platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0 -- /usr/local/bin/python3.12
@@ -64,20 +110,24 @@ rootdir: /app
 configfile: pytest.ini
 testpaths: tests
 plugins: anyio-4.14.2
-collected 12 items
+collected 16 items
 
-tests/test_submissions.py::test_valid_submission_stored PASSED                                  [  8%]
-tests/test_submissions.py::test_missing_required_field_returns_422 PASSED                       [ 16%]
-tests/test_submissions.py::test_invalid_email_returns_422 PASSED                                [ 25%]
-tests/test_submissions.py::test_oversized_message_returns_422 PASSED                             [ 33%]
-tests/test_submissions.py::test_cors_preflight_allows_configured_origin PASSED                   [ 41%]
-tests/test_submissions.py::test_cors_preflight_rejects_disallowed_origin PASSED                  [ 50%]
-tests/test_widgets.py::test_create_widget_requires_auth PASSED                                   [ 58%]
-tests/test_widgets.py::test_create_and_get_widget PASSED                                         [ 66%]
-tests/test_widgets.py::test_get_nonexistent_widget_returns_404 PASSED                             [ 75%]
-tests/test_widgets.py::test_tenant_isolation_on_get_update_delete PASSED                          [ 83%]
-tests/test_widgets.py::test_update_widget PASSED                                                  [ 91%]
-tests/test_widgets.py::test_delete_widget PASSED                                                  [100%]
+tests/test_submissions.py::test_normalize_ip_accepts_valid_ip PASSED                           [ 6%]
+tests/test_submissions.py::test_normalize_ip_rejects_garbage PASSED                           [ 12%]
+tests/test_submissions.py::test_valid_submission_stored PASSED                                [ 18%]
+tests/test_submissions.py::test_missing_required_field_returns_422 PASSED                     [ 25%]
+tests/test_submissions.py::test_invalid_email_returns_422 PASSED                              [ 31%]
+tests/test_submissions.py::test_oversized_message_returns_422 PASSED                          [ 37%]
+tests/test_submissions.py::test_cors_preflight_allows_configured_origin PASSED                [ 43%]
+tests/test_submissions.py::test_cors_preflight_rejects_disallowed_origin PASSED               [ 50%]
+tests/test_submissions.py::test_honeypot_filled_marks_rejected_spam PASSED                    [ 56%]
+tests/test_submissions.py::test_rate_limit_returns_429_after_burst PASSED                     [ 62%]
+tests/test_widgets.py::test_create_widget_requires_auth PASSED                                [ 68%]
+tests/test_widgets.py::test_create_and_get_widget PASSED                                      [ 75%]
+tests/test_widgets.py::test_get_nonexistent_widget_returns_404 PASSED                         [ 81%]
+tests/test_widgets.py::test_tenant_isolation_on_get_update_delete PASSED                      [ 87%]
+tests/test_widgets.py::test_update_widget PASSED                                              [ 93%]
+tests/test_widgets.py::test_delete_widget PASSED                                              [100%]
 
-====================================== 12 passed, 1 warning in 0.63s ======================================
+====================================== 16 passed, 1 warning in 0.92s ======================================
 ```

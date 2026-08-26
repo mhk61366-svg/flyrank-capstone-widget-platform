@@ -8,3 +8,4 @@ slowapi
 httpx
 email-validator
 pytest
+httpx2

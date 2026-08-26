@@ -2,6 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.auth import get_current_tenant_id
+from app.services.submission_service import safe_ip
+
 
 FAKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
@@ -19,6 +21,13 @@ def widget_id(public_client):
 def valid_payload(widget_id):
     return {"widget_id": widget_id, "name": "Test", "email": "emamartinez@gmail.com", "age": 35, "gender": "female"}
 
+def test_normalize_ip_accepts_valid_ip():
+    assert safe_ip("8.8.8.8") == "8.8.8.8"
+
+def test_normalize_ip_rejects_garbage():
+    assert safe_ip("testclient") is None
+    assert safe_ip(None) is None
+    
 def test_valid_submission_stored(public_client, widget_id):
     resp = public_client.post("/submissions", json=valid_payload(widget_id))
     assert resp.status_code == 201
@@ -56,3 +65,16 @@ def test_cors_preflight_rejects_disallowed_origin(public_client):
         headers={"Origin": "http://evil.com", "Access-Control-Request-Method": "POST"},
     )
     assert "access-control-allow-origin" not in resp.headers
+
+def test_honeypot_filled_marks_rejected_spam(public_client, widget_id):
+    payload = valid_payload(widget_id)
+    payload["hp_field"] = "im a bot"
+    resp = public_client.post("/submissions", json=payload)
+    assert resp.status_code == 201
+    assert resp.json()["status"] == "rejected_spam"
+
+def test_rate_limit_returns_429_after_burst(public_client, widget_id):
+    payload = valid_payload(widget_id)
+    statuses = [public_client.post("/submissions", json=payload).status_code for _ in range(15)]
+    assert 429 in statuses
+

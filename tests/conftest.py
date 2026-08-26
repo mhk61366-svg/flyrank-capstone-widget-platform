@@ -14,3 +14,8 @@ def client():
     yield TestClient(app)
     app.dependency_overrides.clear()
 
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    from app.services.rate_limit import limiter
+    limiter.reset()
+    yield
