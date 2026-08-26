@@ -31,7 +31,31 @@ exists and merely belongs to someone else, while a `404` reveals nothing about e
 Create → `201` with `id`; get → `200`; get nonexistent → `404`; update → `200` with updated field;
 delete → `204`, and a subsequent get on the deleted widget returns `404`.
 
-**Terminal output (all six tests above):**
+---
+
+## Public Submission API (2b)
+
+### ✅ All incoming input validated; malformed payloads rejected with clean 4xx, never 500
+
+**Tests:** `test_valid_submission_stored`, `test_missing_required_field_returns_422`,
+`test_invalid_email_returns_422`, `test_oversized_message_returns_422`
+**Command:** `docker compose exec api pytest -v`
+
+Valid submission → `201` with `status: "stored"`. Missing `age`, an invalid email format, and an
+oversized `message` (>2000 chars) each return `422` with a structured Pydantic validation error,
+never a raw crash.
+
+### ✅ Cross-origin submissions work: CORS headers correct, preflight (OPTIONS) handled
+
+**Tests:** `test_cors_preflight_allows_configured_origin`, `test_cors_preflight_rejects_disallowed_origin`
+**Command:** `docker compose exec api pytest -v`
+
+A preflight `OPTIONS` request from the configured origin (`http://localhost:5500`) returns `200`
+with a matching `access-control-allow-origin` header. A preflight from an unconfigured origin
+(`http://evil.com`) returns no `access-control-allow-origin` header at all — proving the CORS
+middleware restricts by origin rather than allowing everything (`*`).
+
+**Terminal output (all 12 tests above):**
 ```
 ========================================== test session starts ==========================================
 platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0 -- /usr/local/bin/python3.12
@@ -40,14 +64,20 @@ rootdir: /app
 configfile: pytest.ini
 testpaths: tests
 plugins: anyio-4.14.2
-collected 6 items
+collected 12 items
 
-tests/test_widgets.py::test_create_widget_requires_auth PASSED                                 [ 16%]
-tests/test_widgets.py::test_create_and_get_widget PASSED                                       [ 33%]
-tests/test_widgets.py::test_get_nonexistent_widget_returns_404 PASSED                           [ 50%]
-tests/test_widgets.py::test_tenant_isolation_on_get_update_delete PASSED                        [ 66%]
-tests/test_widgets.py::test_update_widget PASSED                                                [ 83%]
-tests/test_widgets.py::test_delete_widget PASSED                                                [100%]
+tests/test_submissions.py::test_valid_submission_stored PASSED                                  [  8%]
+tests/test_submissions.py::test_missing_required_field_returns_422 PASSED                       [ 16%]
+tests/test_submissions.py::test_invalid_email_returns_422 PASSED                                [ 25%]
+tests/test_submissions.py::test_oversized_message_returns_422 PASSED                             [ 33%]
+tests/test_submissions.py::test_cors_preflight_allows_configured_origin PASSED                   [ 41%]
+tests/test_submissions.py::test_cors_preflight_rejects_disallowed_origin PASSED                  [ 50%]
+tests/test_widgets.py::test_create_widget_requires_auth PASSED                                   [ 58%]
+tests/test_widgets.py::test_create_and_get_widget PASSED                                         [ 66%]
+tests/test_widgets.py::test_get_nonexistent_widget_returns_404 PASSED                             [ 75%]
+tests/test_widgets.py::test_tenant_isolation_on_get_update_delete PASSED                          [ 83%]
+tests/test_widgets.py::test_update_widget PASSED                                                  [ 91%]
+tests/test_widgets.py::test_delete_widget PASSED                                                  [100%]
 
-====================================== 6 passed, 1 warning in 0.42s ======================================
+====================================== 12 passed, 1 warning in 0.63s ======================================
 ```
