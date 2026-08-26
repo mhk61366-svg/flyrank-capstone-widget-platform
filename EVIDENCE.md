@@ -138,3 +138,57 @@ tests/test_widgets.py::test_update_widget PASSED                                
 tests/test_widgets.py::test_delete_widget PASSED                                              [100%]
 
 ========================================== 17 passed in 1.47s ==========================================
+
+---
+
+## Geo Enrichment & Provider Fallback (2d)
+
+### ✅ Geo enrichment falls back to the second provider when the first is unavailable
+
+**Test:** `test_geo_enrichment_falls_back_to_second_provider`
+**Command:** `docker compose exec api pytest -v tests/test_submissions.py -k geo_enrichment`
+
+The first provider is mocked as unavailable and the second provider returns `Testland` / `Testville`.
+The fallback chain returns the second provider's result without making a real network request.
+
+### ✅ Geo enrichment degrades safely when both providers are unavailable
+
+**Test:** `test_geo_enrichment_returns_none_when_both_providers_down`
+**Command:** `docker compose exec api pytest -v tests/test_submissions.py -k geo_enrichment`
+
+When both providers are mocked as unavailable, enrichment returns `country: None` and `city: None`
+rather than raising an error.
+
+### ✅ Submission still succeeds when both geo providers are unavailable
+
+**Test:** `test_submission_succeeds_when_both_geo_providers_down`
+**Command:** `docker compose exec api pytest -v tests/test_submissions.py -k geo`
+
+The submission endpoint returns `201` with `status: "stored"` even when both geo providers fail,
+proving that enrichment degrades without blocking valid submissions.
+
+### ✅ Manual real-network geo enrichment confirmed working
+
+**Command:** `docker compose exec db psql -U widgetuser -d widgetdb -c "SELECT country, city, ip_address FROM submissions ORDER BY created_at DESC LIMIT 1;"`
+
+With a temporary public IP used for the manual verification, the database stored the provider result:
+
+```text
+country    |  city   | ip_address
+---------------+---------+------------
+ United States | Ashburn | 172.18.0.1
+(1 row)
+```
+
+After the hardcoded IP was reverted, the local Docker gateway address had no geo result, as expected:
+
+```text
+country | city | ip_address
+---------+------+------------
+		 |      | 172.18.0.
+(1 row)
+```
+
+The first output proves real provider enrichment returned data; the second confirms the reverted
+implementation no longer uses the temporary hardcoded address and safely stores empty geo fields
+for the local Docker address.
