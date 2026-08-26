@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.auth import get_current_tenant_id
 from app.services.submission_service import safe_ip
+from app.services.rate_limit import limiter
 
 
 FAKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
@@ -78,3 +79,10 @@ def test_rate_limit_returns_429_after_burst(public_client, widget_id):
     statuses = [public_client.post("/submissions", json=payload).status_code for _ in range(15)]
     assert 429 in statuses
 
+def test_normal_request_succeeds_after_rate_limit_window(public_client, widget_id):
+    payload = valid_payload(widget_id)
+    for _ in range(15):
+        public_client.post("/submissions", json=payload)
+    limiter.reset()
+    resp = public_client.post("/submissions", json=payload)
+    assert resp.status_code == 201
