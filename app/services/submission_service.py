@@ -31,7 +31,7 @@ def create_submission(conn, data, ip_address: str):
         )
     
     try:
-        notify.send_confirmation(data.email, str(widget_id))
+        notify.send_confirmation(data.email, str(data.widget_id))
     except Exception as e:
         print(f"[NOTIFY ERROR] failed to notify {data.email}: {e}")
     return submission

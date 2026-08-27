@@ -4,7 +4,7 @@ from app.main import app
 from app.auth import get_current_tenant_id
 from app.services.submission_service import safe_ip
 from app.services.rate_limit import limiter
-from app.services import geo_enrichment
+from app.services import geo_enrichment, notify
 
 FAKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
@@ -111,3 +111,24 @@ def test_submission_succeeds_when_both_geo_providers_down(public_client, widget_
     resp = public_client.post("/submissions", json=valid_payload(widget_id))
     assert resp.status_code == 201
     assert resp.json()["status"] == "stored"
+
+def test_submission_succeeds_even_if_notify_raises(public_client, widget_id, monkeypatch):
+    def broken_notify(email, widget_id):
+        raise RuntimeError("SMTP is down")
+    
+    monkeypatch.setattr(notify, "send_confirmation", broken_notify)
+
+    resp = public_client.post("/submissions", json=valid_payload(widget_id))
+    assert resp.status_code == 201
+    assert resp.json()["status"] == "stored"
+
+def test_notify_called_on_successful_submission(public_client, widget_id, monkeypatch):
+    called = {}
+    def fake_notify(email, wid):
+        called["email"] = email
+        called["widget_id"] = wid
+    monkeypatch.setattr(notify, "send_confirmation", fake_notify)
+
+    resp = public_client.post("/submissions", json=valid_payload(widget_id))
+    assert resp.status_code == 201
+    assert called["email"] == valid_payload(widget_id)["email"]
