@@ -108,42 +108,6 @@ test artifact.
 A valid IP string (`8.8.8.8`) passes through unchanged; `"testclient"` and `None` both resolve to
 `None`, which the `inet` column accepts as `NULL`.
 
-**Terminal output (full suite after Phase 2c):**
-========================================= test session starts =========================================
-platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0 -- /usr/local/bin/python3.12
-cachedir: .pytest_cache
-rootdir: /app
-configfile: pytest.ini
-testpaths: tests
-plugins: anyio-4.14.2
-collected 21 items
-
-tests/test_submissions.py::test_normalize_ip_accepts_valid_ip PASSED                              [  4%]
-tests/test_submissions.py::test_normalize_ip_rejects_garbage PASSED                               [  9%]
-tests/test_submissions.py::test_valid_submission_stored PASSED                                    [ 14%]
-tests/test_submissions.py::test_missing_required_field_returns_422 PASSED                         [ 19%]
-tests/test_submissions.py::test_invalid_email_returns_422 PASSED                                  [ 23%]
-tests/test_submissions.py::test_oversized_message_returns_422 PASSED                              [ 28%] 
-tests/test_submissions.py::test_cors_preflight_allows_configured_origin PASSED                    [ 33%]
-tests/test_submissions.py::test_cors_preflight_rejects_disallowed_origin PASSED                   [ 38%]
-tests/test_submissions.py::test_honeypot_filled_marks_rejected_spam PASSED                        [ 42%]
-tests/test_submissions.py::test_rate_limit_returns_429_after_burst PASSED                         [ 47%]
-tests/test_submissions.py::test_normal_request_succeeds_after_rate_limit_window PASSED            [ 52%]
-tests/test_submissions.py::test_geo_enrichment_uses_first_provider_when_available PASSED          [ 57%]
-tests/test_submissions.py::test_geo_enrichment_falls_back_to_second_provider PASSED               [ 61%]
-tests/test_submissions.py::test_geo_enrichment_returns_none_when_both_providers_down PASSED       [ 66%]
-tests/test_submissions.py::test_submission_succeeds_when_both_geo_providers_down PASSED           [ 71%]
-tests/test_widgets.py::test_create_widget_requires_auth PASSED                                    [ 76%]
-tests/test_widgets.py::test_create_and_get_widget PASSED                                          [ 80%]
-tests/test_widgets.py::test_get_nonexistent_widget_returns_404 PASSED                             [ 85%]
-tests/test_widgets.py::test_tenant_isolation_on_get_update_delete PASSED                          [ 90%]
-tests/test_widgets.py::test_update_widget PASSED                                                  [ 95%]
-tests/test_widgets.py::test_delete_widget PASSED                                                  [100%]
-
-========================================== 21 passed in 1.53s ==========================================
-
-
----
 
 ## Geo Enrichment & Provider Fallback (2d)
 
@@ -215,3 +179,77 @@ country | city | ip_address
 The first output proves real provider enrichment returns data over the live network; the second
 confirms the endpoint degrades safely (stores `NULL` geo fields, no error) once the hardcode is
 removed and a real, non-geolocatable IP is used.
+
+---
+
+## Safe Side Effect — Notify (2e)
+
+### ✅ A failing confirmation email/webhook does not prevent the submission from being stored
+
+**Test:** `test_submission_succeeds_even_if_notify_raises`
+**Command:** `docker compose exec api pytest -v`
+
+`notify.send_confirmation` is mocked to raise `RuntimeError("SMTP is down")`. The submission
+endpoint still returns `201` with `status: "stored"` — the failure is caught and logged
+(`[NOTIFY ERROR] ...`) inside `create_submission`'s own `try/except Exception` boundary, never
+propagating up to break the response. This is the one place in the codebase where catching a
+bare `Exception` is intentional rather than lazy: it's the explicit "this must never take down
+the main path" boundary the brief calls out under Probe 5.
+
+### ✅ Notify is actually invoked on a normal, successful submission
+
+**Test:** `test_notify_called_on_successful_submission`
+**Command:** `docker compose exec api pytest -v`
+
+`notify.send_confirmation` is mocked to record its arguments instead of printing. A normal
+submission triggers the mock with the correct email and widget ID, proving the side effect
+genuinely fires on the happy path — not just that failures are survivable. Without this test,
+deleting the `notify.send_confirmation(...)` call entirely would have left every other test
+passing, since the failure test alone only proves *robustness*, not that the call happens.
+
+**Bug caught by writing this test:** `create_submission` was calling
+`notify.send_confirmation(data.email, str(widget_id))` — referencing a bare `widget_id` name
+that doesn't exist in that function's scope (the parameter is `data`, and the ID is
+`data.widget_id`). This raised a `NameError` on every single submission, silently swallowed by
+the same `try/except Exception` block designed to protect against exactly this kind of failure.
+Every prior "PASSED" for notify-related tests had passed by coincidence, not because
+`send_confirmation` ever ran successfully. Fixed to
+`notify.send_confirmation(data.email, str(data.widget_id))`.
+
+**Terminal output (full suite, end of Phase 2):**
+```
+========================================= test session starts =========================================
+platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0 -- /usr/local/bin/python3.12
+cachedir: .pytest_cache
+rootdir: /app
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.14.2
+collected 23 items
+
+tests/test_submissions.py::test_normalize_ip_accepts_valid_ip PASSED                             [  4%]
+tests/test_submissions.py::test_normalize_ip_rejects_garbage PASSED                              [  8%]
+tests/test_submissions.py::test_valid_submission_stored PASSED                                   [ 13%]
+tests/test_submissions.py::test_missing_required_field_returns_422 PASSED                        [ 17%]
+tests/test_submissions.py::test_invalid_email_returns_422 PASSED                                 [ 21%]
+tests/test_submissions.py::test_oversized_message_returns_422 PASSED                             [ 26%]
+tests/test_submissions.py::test_cors_preflight_allows_configured_origin PASSED                   [ 30%]
+tests/test_submissions.py::test_cors_preflight_rejects_disallowed_origin PASSED                  [ 34%]
+tests/test_submissions.py::test_honeypot_filled_marks_rejected_spam PASSED                       [ 39%]
+tests/test_submissions.py::test_rate_limit_returns_429_after_burst PASSED                        [ 43%]
+tests/test_submissions.py::test_normal_request_succeeds_after_rate_limit_window PASSED           [ 47%]
+tests/test_submissions.py::test_geo_enrichment_uses_first_provider_when_available PASSED         [ 52%]
+tests/test_submissions.py::test_geo_enrichment_falls_back_to_second_provider PASSED              [ 56%]
+tests/test_submissions.py::test_geo_enrichment_returns_none_when_both_providers_down PASSED      [ 60%]
+tests/test_submissions.py::test_submission_succeeds_when_both_geo_providers_down PASSED          [ 65%]
+tests/test_submissions.py::test_submission_succeeds_even_if_notify_raises PASSED                 [ 69%]
+tests/test_submissions.py::test_notify_called_on_successful_submission PASSED                    [ 73%]
+tests/test_widgets.py::test_create_widget_requires_auth PASSED                                   [ 78%]
+tests/test_widgets.py::test_create_and_get_widget PASSED                                         [ 82%]
+tests/test_widgets.py::test_get_nonexistent_widget_returns_404 PASSED                            [ 86%]
+tests/test_widgets.py::test_tenant_isolation_on_get_update_delete PASSED                         [ 91%]
+tests/test_widgets.py::test_update_widget PASSED                                                 [ 95%]
+tests/test_widgets.py::test_delete_widget PASSED                                                 [100%]
+
+========================================== 23 passed in 1.42s ==========================================
+```
