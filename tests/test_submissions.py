@@ -132,3 +132,19 @@ def test_notify_called_on_successful_submission(public_client, widget_id, monkey
     resp = public_client.post("/submissions", json=valid_payload(widget_id))
     assert resp.status_code == 201
     assert called["email"] == valid_payload(widget_id)["email"]
+
+def test_actual_post_response_has_cors_header_for_allowed_origin(public_client, widget_id):
+    resp = public_client.post(
+        "/submissions",
+        json=valid_payload(widget_id),
+        headers={"Origin": "http://localhost:5500"},
+    )
+    assert resp.headers.get("access-control-allow-origin") == "http://localhost:5500"
+
+def test_actual_post_response_has_no_cors_header_for_disallowed_origin(public_client, widget_id):
+    resp = public_client.post(
+        "/submissions",
+        json=valid_payload(widget_id),
+        headers={"Origin": "http://evil.com"},
+    )
+    assert "access-control-allow-origin" not in resp.headers
