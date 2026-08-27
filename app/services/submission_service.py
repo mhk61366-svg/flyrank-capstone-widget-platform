@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from app.repositories import widget_repo, submission_repo
 import ipaddress
-from app.services import spam_check, geo_enrichment
+from app.services import spam_check, geo_enrichment, notify
 
 def safe_ip(ip: str) -> str | None:
     try:
@@ -24,8 +24,14 @@ def create_submission(conn, data, ip_address: str):
             honeypot_triggered=True, status="rejected_spam",
         )
     geo = geo_enrichment.enrich(ip_address)
-    return submission_repo.insert(
+    submission = submission_repo.insert(
         conn, widget_id=str(data.widget_id), tenant_id=widget["tenant_id"], name=data.name, email=data.email,
         age=data.age, gender=data.gender, message=data.message, ip_address=ip_address, country=geo["country"],
         city=geo["city"], honeypot_triggered=False, status="stored",
         )
+    
+    try:
+        notify.send_confirmation(data.email, str(widget_id))
+    except Exception as e:
+        print(f"[NOTIFY ERROR] failed to notify {data.email}: {e}")
+    return submission
