@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.config import ALLOWED_ORIGINS
-from app.routes import widgets, submissions
+from app.routes import widgets, submissions, widget_public
 from app.services.rate_limit import limiter
 from slowapi.middleware import SlowAPIMiddleware
 
@@ -23,5 +23,6 @@ app.add_middleware(
 
 app.include_router(widgets.router)
 app.include_router(submissions.router)
+app.include_router(widget_public.router)
 
 
