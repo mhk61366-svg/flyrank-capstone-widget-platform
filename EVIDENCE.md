@@ -336,4 +336,49 @@ tests/test_widget_public.py::test_config_404_for_nonexistent_widget PASSED      
 tests/test_widget_public.py::test_widget_js_served_with_immutable_cache_header PASSED             [100%]
 
 =========================================== 3 passed in 0.21s ===========================================
+
 ```
+
+## Customer-Site Test Page & Cross-Origin Embed (3b)
+
+### ✅ Widget renders on a page served from a different origin, and a real submission is stored end-to-end
+
+**Verified via:** manual browser test (not automated — see honest scope note below).
+`customer-site/index.html` served on `http://localhost:5500` via `python -m http.server 5500`,
+loading the embed snippet pointed at the API running on `http://localhost:8000`. Two genuinely
+different origins (different ports), which is what actually triggers real browser CORS
+enforcement — not a local trick standing in for it.
+
+In a real browser: the widget form rendered correctly (all five fields — name, email, age,
+gender, message — plus the hidden honeypot), was filled in and submitted, and the page displayed
+"Thanks! We got your submission." DevTools' Network tab showed the `OPTIONS` preflight followed
+by the real `POST`, both succeeding.
+
+**Confirmed the submission actually persisted, not just that the UI looked successful:**
+
+**Command:**
+ docker compose exec db psql -U widgetuser -d widgetdb -c "SELECT name, email, status, created_at FROM submissions ORDER BY created_at DESC LIMIT 1;
+
+
+**Output:**
+
+  name  |      email       | status |          created_at           
+--------+------------------+--------+-------------------------------
+ Farhan | farhan@gmail.com | stored | 2026-08-28 13:08:21.341625+00
+
+A real row, with the values actually typed into the browser form, and `status: stored` — proving
+the full path (render → cross-origin submit → validate → store) worked, not just that the page
+displayed a friendly message.
+
+**Honest scope note:** "widget renders on a second-origin page" is verified manually here, by
+eye and by DB query — not by an automated headless-browser test (Playwright/Selenium). That
+would be a new tool with real setup cost not otherwise needed by this project; a manual,
+documented verification is a legitimate way to satisfy this requirement, it's just not
+mechanically re-runnable the way the pytest suite is. Stated plainly rather than implied
+otherwise.
+
+**Browser console noise, unrelated to the app — noted so it isn't mistaken for a bug:** two 404s
+appeared during this test (`favicon.ico` and `.well-known/appspecific/com.chrome.devtools.json`).
+Both are automatic browser/DevTools requests unrelated to `customer-site/index.html` or the API;
+neither reflects an application error.
+
