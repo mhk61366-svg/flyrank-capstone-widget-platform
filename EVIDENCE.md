@@ -382,3 +382,51 @@ appeared during this test (`favicon.ico` and `.well-known/appspecific/com.chrome
 Both are automatic browser/DevTools requests unrelated to `customer-site/index.html` or the API;
 neither reflects an application error.
 
+### ✅ Widget renders and submits successfully from a real, independently-hosted origin
+
+**Manual verification** — real browser, real deployed site, not `TestClient`
+**Setup:** embed script added to a live Netlify-hosted page (`https://7wondersworld.netlify.app`),
+`ALLOWED_ORIGINS` updated to include the real Netlify domain.
+
+**Two real bugs found and fixed during this check, not caught by any automated test so far:**
+
+1. **Private Network Access (PNA) block.** Chrome refused the request entirely with "blocked by
+   CORS policy: Permission was denied for this request to access the loopback address space" —
+   a stricter, separate browser restriction (not ordinary CORS) that blocks any public `https://`
+   origin from fetching a `localhost`/loopback target. Fixed by adding a custom
+   `PrivateNetworkMiddleware` that echoes `Access-Control-Allow-Private-Network: true` on
+   preflight requests carrying `Access-Control-Request-Private-Network`. This only works because
+   the browser and the API happen to run on the same machine during dev/demo; a real third-party
+   visitor still could not reach `localhost:8000`, which is a stated, accepted limitation of this
+   capstone's $0/no-hosting scope (see README limitations).
+
+2. **Trailing-slash origin mismatch.** `ALLOWED_ORIGINS` in `.env` had
+   `https://7wondersworld.netlify.app/` (trailing slash); the browser's real `Origin` header is
+   sent without one. `CORSMiddleware` does an exact string match, so this silently failed CORS
+   with "No 'Access-Control-Allow-Origin' header is present" until the trailing slash was
+   removed.
+
+**Command:**
+```
+docker compose exec api python -c "from app.config import ALLOWED_ORIGINS; print(ALLOWED_ORIGINS)"
+```
+['http://localhost:5500', 'https://7wondersworld.netlify.app']
+
+
+**Result:** widget config loads, form renders on the live page, and a real submission from that
+page lands in the database.
+
+**Command:**
+
+docker compose exec db psql -U widgetuser -d widgetdb -c "SELECT id, widget_id, name, email, country, city, created_at FROM submissions ORDER BY created_at DESC LIMIT 3;"
+
+**Output**
+
+                  id                  |              widget_id               |  name  |         email         | country | city |          created_at           
+--------------------------------------+--------------------------------------+--------+-----------------------+---------+------+-------------------------------
+ 92c7bb14-8de8-480d-a557-f4efbfefaa9b | 79ff7422-46ca-4e83-8dba-5693b01b4d1d | saad   | saad@gmail.com        |         |      | 2026-08-28 15:01:16.889037+00
+ dc2520a5-0b21-4152-be06-dde138deb8e3 | 48b28b72-e133-43fd-9c8c-0a3cec4b0f68 | Farhan | farhan@gmail.com      |         |      | 2026-08-28 13:08:21.341625+00
+ 319540b0-d253-48b8-abb6-89cc1976d1c6 | 92ca3669-2b59-40ce-b429-31d789efc53f | Test   | emamartinez@gmail.com |         |      | 2026-08-28 06:37:50.129242+00
+(3 rows)
+:
+
