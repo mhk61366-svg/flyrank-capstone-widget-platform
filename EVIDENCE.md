@@ -275,4 +275,65 @@ tests/test_widgets.py::test_update_widget PASSED                                
 tests/test_widgets.py::test_delete_widget PASSED                                                  [100%]
 
 ========================================== 25 passed in 1.81s ==========================================
+
+## Widget Delivery (3a)
+
+### ✅ Embed snippet generated per widget
+
+**Verified via:** Postman — `POST /widgets` and `GET /widgets/{id}` responses
+
+No automated test for this specifically — `embed_snippet` is a deterministic string built from
+`API_BASE_URL`, the widget's own `id`, and `WIDGET_JS_VERSION`, not business logic with edge
+cases worth unit testing. Confirmed present and correctly formatted in the response body:
+`"embed_snippet": "<script src=\"http://localhost:8000/widget.js?id=1111c50e-3f2a-42d5-85a2-83f6b5ebcee7&v=1\"></script>"`.
+
+### ✅ Public config endpoint serves a small payload with correct HTTP cache headers, no tenant leak
+
+**Tests:** `test_config_returns_cache_header_and_no_tenant_id`, `test_config_404_for_nonexistent_widget`
+**Command:** `docker compose exec api pytest -v tests/test_widget_public.py`
+
+`GET /widgets/{id}/config` returns `200` with `Cache-Control: public, max-age=60` and a small
+JSON body (`title`, `description`, `button_text`) — `tenant_id` is deliberately absent, since
+this is a public endpoint any anonymous visitor's browser can call. A nonexistent widget ID
+returns `404`, not a crash or an empty success response.
+
+### ✅ Widget JavaScript is served as a versioned bundle with correct cache headers
+
+**Test:** `test_widget_js_served_with_immutable_cache_header`
+**Command:** `docker compose exec api pytest -v tests/test_widget_public.py`
+
+`GET /widget.js` returns `200`, `Content-Type: application/javascript`, and
+`Cache-Control: public, max-age=31536000, immutable`. Versioning is via a `?v=` query parameter
+(bumped manually in `WIDGET_JS_VERSION` when the file changes) rather than a content-hashed
+filename — simpler, and sufficient to satisfy "new version = new URL or cache-bust" per the brief.
+
+### Bug fixed during this phase: `Cache-Control` header silently dropped on `/widget.js`
+
+FastAPI's pattern of injecting a `Response` object and mutating `response.headers[...]` only
+takes effect when the route function returns plain data (a dict/list/model) that FastAPI wraps
+into a response itself. `get_widget_js` instead explicitly constructed and returned its own
+`Response(...)` object — FastAPI sends that object as-is and never applies the injected
+parameter's header mutation, so `Cache-Control` was silently missing from every response despite
+the code appearing to set it. Confirmed via Postman: `Content-Type` and body were correct, but
+the Headers tab showed no `Cache-Control` at all.
+
+**Fix:** pass `headers={"Cache-Control": "..."}` directly into the `Response(...)` constructor
+being returned, instead of mutating a separate injected `response` parameter that was never
+actually being sent.
+
+**Terminal output:**
+```
+========================================== test session starts ==========================================
+platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0 -- /usr/local/bin/python3.12
+cachedir: .pytest_cache
+rootdir: /app
+configfile: pytest.ini
+plugins: anyio-4.14.2
+collected 3 items
+
+tests/test_widget_public.py::test_config_returns_cache_header_and_no_tenant_id PASSED             [ 33%]
+tests/test_widget_public.py::test_config_404_for_nonexistent_widget PASSED                        [ 66%]
+tests/test_widget_public.py::test_widget_js_served_with_immutable_cache_header PASSED             [100%]
+
+=========================================== 3 passed in 0.21s ===========================================
 ```

@@ -19,3 +19,14 @@ def reset_rate_limiter():
     from app.services.rate_limit import limiter
     limiter.reset()
     yield
+
+@pytest.fixture
+def public_client():
+    return TestClient(app)
+
+@pytest.fixture
+def widget_id(public_client):
+    app.dependency_overrides[get_current_tenant_id] = lambda: FAKE_TENANT_ID
+    resp = public_client.post("/widgets", json={"title": "Test widget"})
+    app.dependency_overrides.clear()
+    return resp.json()["id"]

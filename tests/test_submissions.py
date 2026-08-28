@@ -6,18 +6,6 @@ from app.services.submission_service import safe_ip
 from app.services.rate_limit import limiter
 from app.services import geo_enrichment, notify
 
-FAKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
-
-@pytest.fixture
-def public_client():
-    return TestClient(app)
-
-@pytest.fixture
-def widget_id(public_client):
-    app.dependency_overrides[get_current_tenant_id] = lambda: FAKE_TENANT_ID
-    resp = public_client.post("/widgets", json={"title": "Test widget"})
-    app.dependency_overrides.clear()
-    return resp.json()["id"]
 
 def valid_payload(widget_id):
     return {"widget_id": widget_id, "name": "Test", "email": "emamartinez@gmail.com", "age": 35, "gender": "female"}
