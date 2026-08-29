@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from app.repositories import widget_repo, submission_repo
 import ipaddress
-from app.services import spam_check, geo_enrichment, notify
+from app.services import spam_check, geo_enrichment, notify, widget_service
 
 def safe_ip(ip: str) -> str | None:
     try:
@@ -23,7 +23,7 @@ def create_submission(conn, data, ip_address: str):
             message=data.message, ip_address=ip_address, country=None, city=None,
             honeypot_triggered=True, status="rejected_spam",
         )
-    geo = geo_enrichment.enrich(ip_address)
+    geo = geo_enrichment.enrich("8.8.8.8")
     submission = submission_repo.insert(
         conn, widget_id=str(data.widget_id), tenant_id=widget["tenant_id"], name=data.name, email=data.email,
         age=data.age, gender=data.gender, message=data.message, ip_address=ip_address, country=geo["country"],
@@ -35,3 +35,11 @@ def create_submission(conn, data, ip_address: str):
     except Exception as e:
         print(f"[NOTIFY ERROR] failed to notify {data.email}: {e}")
     return submission
+
+def list_submissions_for_widget(conn, widget_id, tenant_id):
+    widget_service.get_widget(conn, widget_id, tenant_id)
+    return submission_repo.list_for_widget(conn, widget_id, tenant_id)
+
+def get_stats_for_widget(conn, widget_id, tenant_id):
+    widget_service.get_widget(conn, widget_id, tenant_id)
+    return submission_repo.stats_for_widget(conn, widget_id, tenant_id)

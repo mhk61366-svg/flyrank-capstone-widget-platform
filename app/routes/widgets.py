@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from app.db import get_db
 from app.auth import get_current_tenant_id
 from app.schemas.widget_schemas import WidgetCreate, WidgetUpdate, WidgetOut
-from app.services import widget_service
+from app.services import widget_service, submission_service
 
 router = APIRouter(prefix="/widgets", tags=["widgets"])
 
@@ -25,3 +25,11 @@ def update_widget(widget_id: str, data: WidgetUpdate, conn=Depends(get_db), tena
 @router.delete("/{widget_id}", status_code=204)
 def delete_widget(widget_id: str, conn=Depends(get_db), tenant_id: str = Depends(get_current_tenant_id)):
     widget_service.delete_widget(conn, widget_id, tenant_id)
+
+@router.get("/{widget_id}/submissions")
+def list_submissions(widget_id: str, conn=Depends(get_db), tenant_id: str = Depends(get_current_tenant_id)):
+    return submission_service.list_submissions_for_widget(conn, widget_id, tenant_id)
+
+@router.get("/{widget_id}/stats")
+def get_stats(widget_id: str, conn=Depends(get_db), tenant_id: str = Depends(get_current_tenant_id)):
+    return submission_service.get_stats_for_widget(conn, widget_id, tenant_id)
