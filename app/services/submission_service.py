@@ -23,7 +23,7 @@ def create_submission(conn, data, ip_address: str):
             message=data.message, ip_address=ip_address, country=None, city=None,
             honeypot_triggered=True, status="rejected_spam",
         )
-    geo = geo_enrichment.enrich("8.8.8.8")
+    geo = geo_enrichment.enrich(ip_address)
     submission = submission_repo.insert(
         conn, widget_id=str(data.widget_id), tenant_id=widget["tenant_id"], name=data.name, email=data.email,
         age=data.age, gender=data.gender, message=data.message, ip_address=ip_address, country=geo["country"],
