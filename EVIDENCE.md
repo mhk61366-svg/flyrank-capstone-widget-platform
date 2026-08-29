@@ -430,3 +430,72 @@ docker compose exec db psql -U widgetuser -d widgetdb -c "SELECT id, widget_id, 
 (3 rows)
 :
 
+## Dashboard API (3d)
+
+**Scope note:** dashboard endpoints aren't individually listed as Definition-of-Done checkboxes
+in the brief — Probe 1 only requires a submission be "visible via the dashboard API," nothing
+stricter. The tests below go beyond that minimum (tenant isolation, spam exclusion, empty-state
+handling, geo/day aggregation specifically) — not strictly required, but proving the endpoints
+are correct rather than merely present.
+
+### ✅ Widget owner can view their submissions and stats; spam tracked separately, not counted as a lead
+
+**Tests:** `test_submissions_list_returns_all_rows_for_owner`, `test_stats_excludes_spam_from_stored_count`
+**Command:** `docker compose exec api pytest -v tests/test_dashboard.py`
+
+`GET /widgets/{id}/submissions` returns all rows for the widget, including spam. `GET
+/widgets/{id}/stats` reports `total_stored` and `total_spam_blocked` as separate counts — a
+honeypot-caught submission is never counted as a real lead, but is still visible as a caught-spam
+number, not silently discarded.
+
+### ✅ Dashboard endpoints require authentication and enforce tenant isolation
+
+**Tests:** `test_dashboard_endpoints_require_auth`, `test_dashboard_endpoints_reject_other_tenant`
+**Command:** `docker compose exec api pytest -v tests/test_dashboard.py`
+
+An unauthenticated request to either endpoint returns `401`. A request from a tenant that doesn't
+own the widget returns `404` (same isolation pattern as widget CRUD in 2a — existence is never
+revealed to a non-owner).
+
+**Bug found and fixed while writing these tests:** `dependency_overrides` on `get_current_tenant_id`
+is a single dictionary shared by the whole `app` object, not scoped per `TestClient`. The original
+`tenant_a_client`/`tenant_b_client` fixtures set this override and only cleared it at fixture
+teardown — meaning when a test needed *two* different tenant identities active across a single
+test (something no earlier test in this project required), the override from one fixture silently
+persisted or got overwritten by another, causing `test_dashboard_endpoints_require_auth` and
+`test_dashboard_endpoints_reject_other_tenant` to both incorrectly return `200` instead of `401`/
+`404` — the "unauthenticated" and "tenant B" clients were secretly still authenticated as tenant A.
+**Fix:** replaced the fixtures with an `as_tenant(tenant_id)` context manager (in `conftest.py`)
+that sets the override and clears it immediately around each individual request, so no identity
+ever leaks past the exact block that needs it.
+
+### ✅ Stats handle the empty case correctly, and geo/day breakdowns aggregate correctly
+
+**Tests:** `test_stats_and_submissions_empty_for_widget_with_no_submissions`, `test_stats_includes_geo_breakdown`
+**Command:** `docker compose exec api pytest -v tests/test_dashboard.py`
+
+A brand-new widget with zero submissions returns an empty list and empty stats rather than
+erroring on an empty result set. Geo enrichment is mocked deterministically (same pattern as the
+Phase 2d fallback tests) to verify `by_country` and `by_day` correctly aggregate real data — this
+automates the same check originally done manually in Phase 3d.2 by temporarily hardcoding a real
+public IP and eyeballing the response.
+
+**Terminal output:**
+```
+========================================== test session starts ==========================================
+platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0 -- /usr/local/bin/python3.12
+cachedir: .pytest_cache
+rootdir: /app
+configfile: pytest.ini
+plugins: anyio-4.14.2
+collected 6 items
+
+tests/test_dashboard.py::test_submissions_list_returns_all_rows_for_owner PASSED             [ 16%]
+tests/test_dashboard.py::test_stats_excludes_spam_from_stored_count PASSED                   [ 33%]
+tests/test_dashboard.py::test_dashboard_endpoints_require_auth PASSED                        [ 50%]
+tests/test_dashboard.py::test_dashboard_endpoints_reject_other_tenant PASSED                 [ 66%]
+tests/test_dashboard.py::test_stats_and_submissions_empty_for_widget_with_no_submissions PASSED [ 83%]
+tests/test_dashboard.py::test_stats_includes_geo_breakdown PASSED                            [100%]
+
+============================================ 6 passed in 0.58s ============================================
+```
