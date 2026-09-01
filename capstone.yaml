@@ -1,0 +1,16 @@
+run: docker compose up -d --build
+seed: docker compose exec api python -m app.seed  # only if you write a seed script; otherwise remove this line
+test: docker compose exec api pytest -v
+base_url: http://localhost:8000
+endpoints:
+  - POST /widgets
+  - GET /widgets
+  - GET /widgets/{id}
+  - PATCH /widgets/{id}
+  - DELETE /widgets/{id}
+  - GET /widgets/{id}/submissions
+  - GET /widgets/{id}/stats
+  - GET /widgets/{id}/config
+  - GET /widget.js
+  - POST /submissions
+  - OPTIONS /submissions

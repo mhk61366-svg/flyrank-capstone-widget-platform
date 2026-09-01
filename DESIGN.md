@@ -1,6 +1,11 @@
 # Design Doc — Embeddable Widget & Lead-Capture Platform
 **Status: SIGNED OFF — build from this.**
 
+## Amendments (post-signoff)
+
+- **§3 — cross-tenant widget access:** originally specified `403 Forbidden`. Changed to
+  `404 Not Found` during Phase 2a — see EVIDENCE.md (2a) for reasoning.
+- **Customer-site scope:** see below — verified beyond the original minimum, not changed.
 Repo: `flyrank-capstone-widget-platform`
 
 ---
@@ -17,7 +22,8 @@ and visible to the tenant via a dashboard API, without ever trusting the origin 
 - 1 spam control: honeypot field
 - Geo fallback chain: ip-api.com → ipapi.co → no geo (never blocks the submission)
 - Email side effect: console log only
-- "Customer site" = plain HTML file on a second local port — no real hosting/CDN
+- "Customer site" = plain HTML file on a second local port — no real hosting/CDN required
+  (additionally verified against a real Netlify origin — see EVIDENCE.md 3b)
 
 ---
 
@@ -47,9 +53,9 @@ submissions
   tenant_id           uuid NOT NULL   -- denormalized from widgets.tenant_id, for fast isolation checks on read
   name                text NOT NULL
   email               text NOT NULL
-  age                 int NOT NULL    -- required, confirmed
-  gender              text NOT NULL   -- required, confirmed
-  message             text NULL       -- optional, confirmed
+  age                 int NOT NULL    -- required
+  gender              text NOT NULL   -- required
+  message             text NULL       -- optional
   ip_address          inet
   country             text NULL
   city                text NULL
