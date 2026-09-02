@@ -499,3 +499,45 @@ tests/test_dashboard.py::test_stats_includes_geo_breakdown PASSED               
 
 ============================================ 6 passed in 0.58s ============================================
 ```
+
+## Seeded Demo Widget
+
+### ✅ The configured seed command creates a known demo widget
+
+**Command configured in `capstone.yaml`:**
+```text
+docker compose exec api python -m app.seed
+```
+
+`app/seed.py` creates the fixed demo widget ID
+`00000000-0000-0000-0000-0000000000aa` for tenant
+`00000000-0000-0000-0000-000000000001`. The seed is idempotent: if the demo widget already
+exists, it reports that fact and does not insert a duplicate.
+
+**Verified via public config endpoint:**
+```text
+$ curl http://localhost:8000/widgets/00000000-0000-0000-0000-0000000000aa/config
+{"id":"00000000-0000-0000-0000-0000000000aa","title":"Demo Signup Widget","description":"Seeded demo widget — public endpoints only, see README limitations","button_text":"Submit"}
+```
+
+**Verified by querying the database directly:**
+```text
+docker compose exec db psql -U widgetuser -d widgetdb -c "SELECT id, title, tenant_id FROM widgets WHERE id = '00000000-0000-0000-0000-0000000000aa';"
+
+                  id                  |       title        |              tenant_id
+--------------------------------------+--------------------+--------------------------------------
+ 00000000-0000-0000-0000-0000000000aa | Demo Signup Widget | 00000000-0000-0000-0000-000000000001
+(1 row)
+```
+
+The public response confirms the seeded configuration is available to an anonymous embed client,
+while the database query confirms the widget is stored under the expected tenant.
+
+## Conclusion
+
+The implemented and documented checks demonstrate the capstone's core flow: authenticated,
+tenant-isolated widget management; public, cacheable widget delivery; cross-origin submissions;
+validation and abuse protection; resilient geo enrichment and notification side effects; and
+authenticated dashboard visibility. The seeded demo widget provides a repeatable starting point
+for exercising the public embed flow locally. Manual browser and live-origin checks are called
+out where they supplement, rather than replace, the automated test suite.

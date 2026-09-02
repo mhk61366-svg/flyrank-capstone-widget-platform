@@ -38,9 +38,11 @@ no local `tenants` table; the verified JWT's `user.id` is used directly as `tena
 2. Copy `.env.example` to `.env` and fill in your Supabase project's URL and publishable key
 3. `docker compose up -d --build`
 4. Run tests: `docker compose exec api pytest -v`
-5. *(Optional)* Seed a demo widget for the public endpoints: `docker compose exec api python -m app.seed`
-   — this only creates data reachable via the public routes (`/config`, `/submissions`); the
-   admin routes still require your own Supabase user (see Limitations).
+5. *(Optional)* Seed the fixed demo widget for the public endpoints:
+  `docker compose exec api python -m app.seed` — this only creates data reachable via the public
+  routes (`/config`, `/submissions`); the admin routes still require your own Supabase user (see
+  Limitations). The manual curl and direct database checks for the seeded widget are recorded in
+  [EVIDENCE.md].
 
 ## API documentation
 
