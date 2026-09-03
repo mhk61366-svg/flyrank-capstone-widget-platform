@@ -122,7 +122,7 @@ Service layer (business logic — no SQL here)
   services/widget_service.py
   services/submission_service.py
       ├─ validation (Pydantic)
-      ├─ rate_limit.py       (in-memory, per-IP + per-widget)
+      ├─ rate_limit.py       (in-memory, per-IP)
       ├─ spam_check.py       (honeypot)
       ├─ geo_enrichment.py   (ip-api.com → ipapi.co → none)
       └─ notify.py           (console-log side effect, failure-tolerant)
@@ -140,7 +140,7 @@ PostgreSQL
 
 **Not building:** production CDN/hosting, bundle minification, real email delivery, more
 than one widget type, CAPTCHA/proof-of-work bot defense, real-time dashboard updates, or a
-local `tenants`/user table — identity is Supabase's job, not this DB's.
+local `tenants`/user table — identity is Supabase's job, not this DB's. per-widget rate limiting — abuse protection is per-IP only, per brief §4's "and/or.
 
 ---
 

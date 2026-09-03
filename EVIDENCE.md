@@ -230,12 +230,6 @@ doesn't guarantee the actual `POST` response is correct too. These two tests clo
 a request from the allowed origin gets a matching `access-control-allow-origin` header on the
 real response; a request from a disallowed origin gets none.
 
-### Dependency update: `httpx2`
-
-Starlette's `TestClient` deprecated its use of plain `httpx` in favor of `httpx2` (maintained by
-Pydantic's team, since `httpx` itself is unmaintained). Added `httpx2` to `requirements.txt`;
-the `StarletteDeprecationWarning` seen in the Phase 2c terminal output is gone as of this commit.
-
 ```
 **Terminal output (full suite, end of Phase 2):**
 ```
