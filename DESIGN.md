@@ -138,9 +138,6 @@ PostgreSQL
 
 ## 5. Explicit non-goal
 
-**Not building:** production CDN/hosting, bundle minification, real email delivery, more
-than one widget type, CAPTCHA/proof-of-work bot defense, real-time dashboard updates, or a
-local `tenants`/user table — identity is Supabase's job, not this DB's. per-widget rate limiting — abuse protection is per-IP only, per brief §4's "and/or.
-
+**Not building**: production CDN/hosting, bundle minification, real email delivery, more than one widget type, CAPTCHA/proof-of-work bot defense, real-time dashboard updates, per-widget rate limiting (abuse protection is per-IP only, per brief §4's "and/or"), or a local tenants/user table — identity is Supabase's job, not this DB's.
 ---
 
