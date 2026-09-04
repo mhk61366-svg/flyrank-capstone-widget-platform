@@ -358,11 +358,7 @@ The containerized setup is used to run the API and its required infrastructure, 
 `docker compose up -d --build`
 
 The repository's `capstone.yaml` records this as the project's run command.
-
 Claude did not build these Docker files for me.
-
-There was one small service-name inconsistency during the project involving the API service name. Claude helped identify and correct that issue.
-
 Apart from that debugging assistance, the Docker configuration was my own work.
 
 ---
@@ -409,13 +405,32 @@ Claude explained what the errors meant and what was causing them. I then made th
 
 ---
 
-## 9.5 Service-name inconsistency
+## 9.5 Client IP rejected by Postgres under automated tests
 
-A small inconsistency in the API service name caused an issue in the containerized setup.
+TestClient doesn't make a real network connection, so request.client.host returned the literal string "testclient" instead of a real IP. The submissions.ip_address column is typed inet, which rejected that string outright and caused three tests to fail with a database-layer error instead of an application-logic one.
 
-Claude helped identify the mismatch and I corrected it.
+Claude helped trace the failure back to the inet type validation rather than the submission logic itself.
+
+I added safe_ip() in app/services/submission_service.py, which validates the incoming value and returns None for anything that isn't a real IP before it reaches the repository layer. See EVIDENCE.md, Abuse Protection & Spam Control (2c).
 
 ---
+
+## 9.6 Cache-Control header dropped on widget.js
+GET /widget.js appeared to set a Cache-Control header in code, but the header was missing from actual responses. FastAPI's pattern of injecting a Response object and mutating response.headers[...] only takes effect when the route returns plain data that FastAPI wraps itself — get_widget_js instead constructed and returned its own Response object directly, so the injected parameter's header mutation was never applied.
+
+Claude helped me understand why the two patterns behave differently.
+
+I fixed it by passing the headers directly into the returned Response(...) constructor. See EVIDENCE.md, Widget Delivery (3a).
+
+---
+
+9.7 Tenant-identity leakage between dashboard test fixtures
+
+dependency_overrides on get_current_tenant_id is a single dictionary shared by the whole app object, not scoped per TestClient. The original tenant-A/tenant-B fixtures set this override and only cleared it at teardown, so tests needing two different tenant identities in the same test saw one identity silently leak into the other — two dashboard isolation tests incorrectly returned 200 instead of 401/404.
+
+Claude helped me trace the false-pass back to override lifecycle rather than the endpoint logic.
+
+I replaced the fixtures with an as_tenant(tenant_id) context manager in conftest.py that sets and clears the override immediately around each request. See EVIDENCE.md, Dashboard API (3d).
 
 # 10. What I Built Myself vs. AI Assistance
 
